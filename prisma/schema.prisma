@@ -29,6 +29,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   orders Order[]
+  cart Cart?
 
   @@map("users") // actual table name in PostgreSQL
 }
@@ -46,23 +47,98 @@ model Category {
   @@map("categories")
 }
 
-// ───────────────────────────────
-// PRODUCT
-// ───────────────────────────────
 model Product {
-  id String @id @unique @default(uuid())
-  name String
+  id          String   @id @unique @default(uuid())
+  name        String
   description String?
-  price Decimal @db.Decimal(10,2)
-  stock Int @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categoryId  String
+  category    Category      @relation(fields: [categoryId], references: [id])
+
+  images      ProductImage[]   // ← multiple images
+  variants    ProductVariant[] // ← color, size, etc.
+  skus        ProductSku[]     // ← actual purchasable combinations
+  orderItems  OrderItem[]
+  cartItems   CartItem[]
+
+  @@map("products")
+}
+
+// product images
+model ProductImage {
+  id        String   @id @unique @default(uuid())
+  url       String   // Cloudinary URL
+  publicId  String   // Cloudinary public_id (for deletion)
+  isMain    Boolean  @default(false) // main display image
+  order     Int      @default(0)     // display order
+  createdAt DateTime @default(now())
+
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@map("product_images")
+}
+
+// variant types e.g. "Color", "Storage", "Size"
+model ProductVariant {
+  id        String   @id @unique @default(uuid())
+  name      String   // e.g. "Color", "Size", "Storage"
+  createdAt DateTime @default(now())
+
+  productId String
+  product   Product              @relation(fields: [productId], references: [id])
+  options   ProductVariantOption[]
+
+  @@map("product_variants")
+}
+
+// variant options e.g. "Black", "White", "128GB"
+model ProductVariantOption {
+  id        String   @id @unique @default(uuid())
+  value     String   // e.g. "Black", "128GB", "XL"
+  createdAt DateTime @default(now())
+
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  skuOptions SkuOption[]
+
+  @@map("product_variant_options")
+}
+
+// SKU = actual purchasable item (specific combination)
+// e.g. iPhone 15 Black 128GB
+model ProductSku {
+  id        String   @id @unique @default(uuid())
+  price     Decimal  @db.Decimal(10, 2)
+  stock     Int      @default(0)
+  skuCode   String?  @unique // optional internal code e.g. "IPH15-BLK-128"
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
-  categoryId String
-  category Category @relation(fields: [categoryId], references: [id])
 
+  productId  String
+  product    Product     @relation(fields: [productId], references: [id])
+  options    SkuOption[] // which variant options this SKU has
+  cartItems  CartItem[]
   orderItems OrderItem[]
-  @@map("products")
+
+  @@map("product_skus")
+}
+
+// links a SKU to its variant options
+model SkuOption {
+  id        String @id @unique @default(uuid())
+
+  skuId     String
+  sku       ProductSku           @relation(fields: [skuId], references: [id])
+
+  optionId  String
+  option    ProductVariantOption @relation(fields: [optionId], references: [id])
+
+  @@unique([skuId, optionId])
+  @@map("sku_options")
 }
 
 
@@ -97,15 +173,50 @@ model Order{
 // ORDER ITEM (junction table)
 // ───────────────────────────────
 model OrderItem{
- id String @id @unique @default(uuid())
- quantity Int
- price Decimal @db.Decimal(10,2)
- 
- orderId String
- order Order @relation(fields: [orderId] ,references: [id])
+  id String @id @unique @default(uuid())
+  quantity Int
+  price Decimal @db.Decimal(10,2)
 
- productId String
- product Product @relation(fields: [productId], references: [id])
+  orderId String
+  order Order @relation(fields: [orderId] ,references: [id])
 
- @@map("order_items")
+  productId String
+  product Product @relation(fields: [productId], references: [id])
+
+  skuId     String     // 👈 snapshot which SKU was bought
+  sku       ProductSku @relation(fields: [skuId], references: [id])
+
+  @@map("order_items")
+}
+
+model Cart {
+  id        String     @id @unique @default(uuid())
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  userId    String     @unique  // 👈 one cart per user
+  user      User       @relation(fields: [userId], references: [id])
+
+  items     CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @unique @default(uuid())
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cartId    String
+  cart      Cart       @relation(fields: [cartId], references: [id])
+
+  productId String
+  product   Product    @relation(fields: [productId], references: [id])
+
+  skuId     String     // 👈 which specific variant they chose
+  sku       ProductSku @relation(fields: [skuId], references: [id])
+
+  @@unique([cartId, skuId])  // 👈 changed from productId to skuId
+  @@map("cart_items")
 }
