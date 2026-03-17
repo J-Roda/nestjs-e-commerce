@@ -1,16 +1,17 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
 import { User } from 'generated/prisma/client';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { Role } from '../common/enums/role.enum';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // CREATE USER
-  async create(dto: CreateUserDto): Promise<Omit<User, 'password'>> {
+  // SIGNUP USER
+  async signup(dto: CreateUserDto): Promise<Omit<User, 'password'>> {
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
 
     if (existing) {
@@ -25,6 +26,10 @@ export class UsersService {
         email: dto.email,
         password: hashedPassword,
       },
+    });
+
+    await this.prisma.cart.create({
+      data: { userId: user.id },
     });
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -85,5 +90,17 @@ export class UsersService {
 
     await this.prisma.user.delete({ where: { id } });
     return { message: `User ${id} deleted successfully` };
+  }
+
+  // UPDATE USER ROLE
+  async updateRole(id: string, role: Role) {
+    await this.findOne(id);
+
+    // 2. Update the role
+    return this.prisma.user.update({
+      where: { id },
+      data: { role },
+      omit: { password: true },
+    });
   }
 }
