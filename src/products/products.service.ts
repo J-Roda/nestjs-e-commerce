@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CategoriesService } from '../categories/categories.service';
 import { CreateProductDto } from './dto/create-product.dto';
 
-import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { CloudinaryService } from '../common/services/cloudinary.service';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { UpdateSkuDto } from './dto/update-sku.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
